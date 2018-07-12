@@ -1533,7 +1533,20 @@ static void * RBQArrayFetchRequestContext = &RBQArrayFetchRequestContext;
     NSAssert(sectionChanges, @"Section changes can't be nil!");
     NSAssert(state, @"State can't be nil!");
 #endif
-    
+
+    /**
+     *  If we are not on the main thread then use a semaphore
+     *  to prevent condition where subsequent processing runs
+     *  before the async delegate calls collection changes on main thread
+     */
+    BOOL useSem = NO;
+
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+
+    if (![NSThread isMainThread]) {
+        useSem = YES;
+    }
+
     typeof(self) __weak weakSelf = self;
     
     // We will first process to find inserts/deletes
@@ -1581,7 +1594,14 @@ static void * RBQArrayFetchRequestContext = &RBQArrayFetchRequestContext;
                                       atIndexPath:objectChange.previousIndexPath
                                     forChangeType:NSFetchedResultsChangeDelete
                                      newIndexPath:nil];
+                    if (useSem) {
+                        dispatch_semaphore_signal(sem);
+                    }
                 }];
+
+                if (useSem) {
+                    dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+                }
             }
             
             objectChange.changeType = NSFetchedResultsChangeDelete;
@@ -1620,8 +1640,17 @@ static void * RBQArrayFetchRequestContext = &RBQArrayFetchRequestContext;
                                       atIndexPath:nil
                                     forChangeType:NSFetchedResultsChangeInsert
                                      newIndexPath:objectChange.updatedIndexpath];
+
+                    if (useSem) {
+                        dispatch_semaphore_signal(sem);
+                    }
                 }];
+
+                if (useSem) {
+                    dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+                }
             }
+
             objectChange.changeType = NSFetchedResultsChangeInsert;
             
             [insertedObjectChanges addObject:objectChange];
@@ -1844,7 +1873,15 @@ static void * RBQArrayFetchRequestContext = &RBQArrayFetchRequestContext;
                                       atIndexPath:objectChange.previousIndexPath
                                     forChangeType:NSFetchedResultsChangeMove
                                      newIndexPath:objectChange.updatedIndexpath];
+
+                    if (useSem) {
+                        dispatch_semaphore_signal(sem);
+                    }
                 }];
+
+                if (useSem) {
+                    dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+                }
             }
             
             objectChange.changeType = NSFetchedResultsChangeMove;
@@ -1872,7 +1909,15 @@ static void * RBQArrayFetchRequestContext = &RBQArrayFetchRequestContext;
                                       atIndexPath:objectChange.previousIndexPath
                                     forChangeType:NSFetchedResultsChangeUpdate
                                      newIndexPath:objectChange.updatedIndexpath];
+
+                    if (useSem) {
+                        dispatch_semaphore_signal(sem);
+                    }
                 }];
+
+                if (useSem) {
+                    dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+                }
             }
         }
     }
